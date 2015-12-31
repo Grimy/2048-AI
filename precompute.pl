@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -wl
 
 use strict;
 use Carp;
@@ -11,46 +11,20 @@ my @chaos;
 
 sub diff {
 	my ($big, $small) = @_;
-	croak "$small > $big" if $small > $big;
 	return $small ? $big - $small : 0;
 }
 
 sub chaos {
-	my @sorted = sort {$b<=>$a} @_;
 	my ($a, $b, $c, $d) = @_;
 	($a, $b, $c, $d) = ($d, $c, $b, $a) if $a < $d;
-
 	if ($a < $b || $a < $c) {
-		if ($b == $c) {
-			die unless $b == $sorted[0];
-			return diff $c + $b, $a;
-		}
-		if ($b > $c) {
-			die unless $b == $sorted[0];
-			return diff $b, max($a, $c + $d);
-		}
-		die unless $c == $sorted[0];
+		return diff $c + $b, $a if $b == $c;
+		return diff $b, max($a, $c + $d) if $b > $c;
 		return diff $c, $b + $a;
 	}
-	die unless $a == $sorted[0];
-
-	if ($b >= $c && $b >= $d) {
-		die unless $b == $sorted[1];
-		if ($b == $a || $b == $d) {
-			return $d > $c ? diff $d, $c : 0;
-		}
-		return 0;
-	}
-
-	if ($c >= $d) {
-		die unless $c == $sorted[1];
-		return diff $c + ($d == $c ? $d : 0), $b;
-	}
-
-	die unless $d == $sorted[1];
-	if ($d == $a) {
-		return diff $d, $c + $b;
-	}
+	return ($b == $a || $b == $d) && $d > $c ? diff $d, $c : 0 if $b >= $c && $b >= $d;
+	return diff $c + ($d == $c ? $d : 0), $b if $c >= $d;
+	return diff $d, $c + $b if $d == $a;
 	# handle case when exactly one of $c and $b is 0 ?
 	return diff $d, 2 * max($c, $b);
 }
@@ -64,13 +38,26 @@ for my $i (0..0xFFFF) {
 	my @left = ((grep {$_} @_), (grep {!$_} @_));
 	for (0..2) {
 		if ($left[$_] == $left[$_ + 1]) {
-			++$left[$_];
+			$left[$_] = ($left[$_] + 1) % 16;
 			$left[$_ + 1] = 0;
 		}
 	}
 	@left = ((grep {$_} @left), (grep {!$_} @left));
 	$move_left[$i] = $left[0] << 12 | $left[1] << 8 | $left[2] << 4 | $left[3];
 	$chaos[$i] = chaos $a, $b, $c, $d;
-
-	print "$a, $b, $c, $d: $chaos[$i]$/";
 }
+
+sub print_array {
+	my $name = shift;
+	print "const u16 $name\[65536] = {\n";
+	for (0..4095) {
+		printf "\t" . "0x%04x, " x 15 . "0x%04x,\n", @_[16*$_..16*$_+15];
+	}
+	print "};\n";
+}
+
+$" = ',';
+print "#include <stdint.h>";
+print "const uint16_t uniq[65536] = {@uniq};";
+print "const uint16_t chaos[65536] = {@chaos};";
+print "const uint16_t move_left[65536] = {@move_left};";
