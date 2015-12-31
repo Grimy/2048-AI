@@ -29,35 +29,30 @@ sub chaos {
 	return diff $d, 2 * max($c, $b);
 }
 
+sub move(&@) {
+	my $sub = shift;
+	@_ = ($sub->(grep {$_} @_), (grep {!$_} @_));
+	for (grep {$_[$_] == $_[$_ + 1]} 0..2) {
+		$_[$_] = ($_[$_] + 1) % 16;
+		$_[$_ + 1] = 0;
+	}
+	@_ = $sub->((grep {$_} @_), (grep {!$_} @_));
+	return $_[0] << 12 | $_[1] << 8 | $_[2] << 4 | $_[3];
+}
+
 for my $i (0..0xFFFF) {
 	@_ = map {($i >> $_) & 0xF} 12, 8, 4, 0;
 	my ($a, $b, $c, $d) = map {$_ ? 1 << $_ : 0} @_;
 
 	$uniq[$i] = ($a ^ $b) | ($c ^ $d);
-
-	my @left = ((grep {$_} @_), (grep {!$_} @_));
-	for (0..2) {
-		if ($left[$_] == $left[$_ + 1]) {
-			$left[$_] = ($left[$_] + 1) % 16;
-			$left[$_ + 1] = 0;
-		}
-	}
-	@left = ((grep {$_} @left), (grep {!$_} @left));
-	$move_left[$i] = $left[0] << 12 | $left[1] << 8 | $left[2] << 4 | $left[3];
+	$move_left[$i] = move {@_} @_;
+	$move_right[$i] = move {reverse @_} @_;
 	$chaos[$i] = chaos $a, $b, $c, $d;
 }
 
-sub print_array {
-	my $name = shift;
-	print "const u16 $name\[65536] = {\n";
-	for (0..4095) {
-		printf "\t" . "0x%04x, " x 15 . "0x%04x,\n", @_[16*$_..16*$_+15];
-	}
-	print "};\n";
-}
-
-$" = ',';
+local $" = ',';
 print "#include <stdint.h>";
 print "const uint16_t uniq[65536] = {@uniq};";
 print "const uint16_t chaos[65536] = {@chaos};";
 print "const uint16_t move_left[65536] = {@move_left};";
+print "const uint16_t move_right[65536] = {@move_right};";
